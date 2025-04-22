@@ -1,0 +1,22 @@
+from . import db
+from flask_login import UserMixin
+from datetime import datetime
+
+class User(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), nullable=False, unique=True)
+    email = db.Column(db.String(150), nullable=False, unique=True)
+    password = db.Column(db.String(150), nullable=False)
+
+class File(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(150), nullable=False)
+    upload_date = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+class FileShare(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    file_id = db.Column(db.Integer, db.ForeignKey('file.id'), nullable=False)
+    shared_with_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    file = db.relationship('File', backref='shares', lazy=True)
+    user = db.relationship('User', backref='shared_files', lazy=True)
