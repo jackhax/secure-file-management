@@ -1,10 +1,12 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, current_user, logout_user, login_required
-from .models import User, File, FileShare
+from .models import User, File, FileShare, DownloadToken
 from . import db
 import os
 from werkzeug.utils import secure_filename
+from datetime import datetime, timedelta
+import secrets
 
 main = Blueprint('main', __name__)
 
@@ -118,6 +120,45 @@ def download_file(filename):
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
+
+
+@main.route('/generate-download-link/<int:file_id>')
+@login_required
+def generate_download_link(file_id):
+    file = File.query.get_or_404(file_id)
+    # Check if the current user is the owner or has access
+    if file.user_id != current_user.id and not FileShare.query.filter_by(file_id=file.id, shared_with_user_id=current_user.id).first():
+        flash('You do not have permission to access this file')
+        return redirect(url_for('main.index'))
+    # Generate a unique token
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(minutes=10)  # Token valid for 10 minutes
+    download_token = DownloadToken(
+        token=token, file_id=file.id, user_id=current_user.id, expires_at=expires_at)
+    db.session.add(download_token)
+    db.session.commit()
+    return redirect(url_for('main.download_file_token', token=token))
+
+
+@main.route('/download/token/<token>')
+@login_required
+def download_file_token(token):
+    download_token = DownloadToken.query.filter_by(token=token).first_or_404()
+    if download_token.expires_at < datetime.utcnow():
+        flash('Download link has expired')
+        return redirect(url_for('main.index'))
+    file = download_token.file
+    # Only allow if current user is the token creator, file owner, or shared user
+    is_owner = file.user_id == current_user.id
+    is_token_user = download_token.user_id == current_user.id
+    is_shared = FileShare.query.filter_by(
+        file_id=file.id, shared_with_user_id=current_user.id).first() is not None
+    if not (is_owner or is_token_user or is_shared):
+        flash('You do not have permission to access this file')
+        return redirect(url_for('main.index'))
+    db.session.delete(download_token)
+    db.session.commit()
+    return send_from_directory(current_app.config['UPLOAD_FOLDER'], file.filename)
 
 
 @main.route('/share/<int:file_id>', methods=['GET', 'POST'])
