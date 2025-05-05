@@ -7,6 +7,14 @@ app = create_app()
 uploads_dir = os.path.join(app.root_path, '../uploads')
 os.makedirs(uploads_dir, exist_ok=True)
 
+# Ensure the database and tables exist
+with app.app_context():
+    db_path = os.path.join(app.root_path, '../instance/site.db')
+    if not os.path.exists(db_path):
+        from app import db
+        db.create_all()
+        print("Database initialized!")
+
 if __name__ == '__main__':
     app.run(
         debug=True,
