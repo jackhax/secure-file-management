@@ -55,7 +55,7 @@ Follow these instructions to set up and run the project locally on your machine.
 
 4. **Initialize the TLS certificates**
 
-   Run the database initialization script to create the necessary tables.
+   Run the certificate initialization script to create the necessary certificate.
 
    ```bash
    ./make_certs.sh
