@@ -18,6 +18,7 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ~/secure-file-management
+            echo ${{ github.run_attempt }} >> deploy.log
             git pull origin main
             source venv/bin/activate
             sudo systemctl restart flaskapp
