@@ -38,8 +38,12 @@ def register():
         password = request.form.get('password')
 
         user = User.query.filter_by(email=email).first()
+        user_by_username = User.query.filter_by(username=username).first()
         if user:
             flash('Email address already exists')
+            return redirect(url_for('auth.register'))
+        if user_by_username:
+            flash('Username already exists')
             return redirect(url_for('auth.register'))
 
         new_user = User(email=email, username=username, password=generate_password_hash(password, method='pbkdf2:sha256'))
