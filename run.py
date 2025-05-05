@@ -11,7 +11,8 @@ os.makedirs(uploads_dir, exist_ok=True)
 instance_dir = os.path.join(app.root_path, '../instance')
 os.makedirs(instance_dir, exist_ok=True)
 if not os.access(instance_dir, os.W_OK):
-    raise PermissionError(f"Instance directory '{instance_dir}' is not writable. Please check permissions.")
+    raise PermissionError(
+        f"Instance directory '{instance_dir}' is not writable. Please check permissions.")
 
 # Ensure the database and tables exist
 with app.app_context():
