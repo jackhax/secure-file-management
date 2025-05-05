@@ -53,12 +53,12 @@ Follow these instructions to set up and run the project locally on your machine.
    pip install -r requirements.txt
    ```
 
-4. **Initialize the Database**
+4. **Initialize the TLS certificates**
 
    Run the database initialization script to create the necessary tables.
 
    ```bash
-   python init_db.py
+   ./make_certs.sh
    ```
 
 5. **Run the Application**
@@ -66,12 +66,12 @@ Follow these instructions to set up and run the project locally on your machine.
    Start the Flask development server.
 
    ```bash
-   python run.py
+   sudo python run.py
    ```
 
 6. **Access the Application**
 
-   Open your web browser and go to `http://127.0.0.1:5000/` to access the application.
+   Open your web browser and go to `https://127.0.0.1/` to access the application.
 
 ### Project Structure
 
