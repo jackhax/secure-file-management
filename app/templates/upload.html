@@ -4,7 +4,7 @@
 <div class="row justify-content-center">
     <div class="col-md-6">
         <h2 class="mb-4">Upload File</h2>
-        <form id="uploadForm" enctype="multipart/form-data" class="mb-4">
+        <form id="uploadForm" method="POST" action="{{ url_for('main.upload_file') }}" enctype="multipart/form-data" class="mb-4">
             <div class="form-group">
                 <label for="file">Upload a new file:</label>
                 <input type="file" class="form-control-file" id="file" name="file" required>
@@ -16,59 +16,4 @@
 
 <div id="message" class="alert" role="alert" style="display: none;"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js"></script>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-      const form = document.getElementById('uploadForm');
-      const fileInput = document.getElementById('file');
-    
-      form.addEventListener('submit', function(event) {
-        event.preventDefault();
-    
-        const file = fileInput.files[0];
-        const messageDiv = document.getElementById('message');
-    
-        if (!file) {
-            messageDiv.textContent = 'Please select a file to upload.';
-            messageDiv.className = 'alert alert-warning';
-            messageDiv.style.display = 'block';
-            return;
-        }
-    
-        const reader = new FileReader();
-    
-        reader.onload = function(e) {
-          const arrayBuffer = e.target.result;
-          const wordArray = CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer));
-    
-            const encrypted = CryptoJS.AES.encrypt(wordArray, 'your-secret-key').toString(); // this is base64
-            const encryptedBlob = new Blob([encrypted], { type: 'text/plain' }); // treat it as plain text
-          const formData = new FormData();
-          formData.append('file', encryptedBlob, file.name + '.enc');
-    
-          fetch("{{ url_for('main.upload_file') }}", {
-            method: 'POST',
-            body: formData
-          }).then(response => {
-            if (response.ok) {
-                messageDiv.textContent = 'File uploaded successfully!';
-                messageDiv.className = 'alert alert-success';
-            } else {
-                messageDiv.textContent = 'File upload failed.';
-                messageDiv.className = 'alert alert-danger';
-            }
-            messageDiv.style.display = 'block';
-            fileInput.value = '';
-          });
-        };
-    
-        reader.onerror = function() {
-          console.error("Failed to read file");
-        };
-    
-        reader.readAsArrayBuffer(file);
-      });
-    });
-    </script>
 {% endblock %}

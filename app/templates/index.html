@@ -12,7 +12,7 @@
         <div class="d-flex justify-content-between align-items-center">
             <span>{{ file.filename }}</span>
             <div>
-                <a class="btn btn-primary btn-sm" href="#" onclick="downloadAndDecrypt('{{ file.filename }}'); return false;">Download</a>
+                <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Download</a>
                 <a class="btn btn-secondary btn-sm" href="{{ url_for('main.share_file', file_id=file.id) }}">Share</a>
                 <form method="POST" action="{{ url_for('main.delete_file', file_id=file.id) }}" style="display:inline;">
                     <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this file?');">Delete</button>
@@ -45,40 +45,9 @@
     <li class="list-group-item d-flex justify-content-between align-items-center">
         {{ file.filename }}
         <div>
-            <a class="btn btn-primary btn-sm" href="#" onclick="downloadAndDecrypt('{{ file.filename }}'); return false;">Download</a>
+            <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Download</a>
         </div>
     </li>
     {% endfor %}
 </ul>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js"></script>
-<script>
-function downloadAndDecrypt(filename) {
-    fetch("{{ url_for('main.download_file', filename='') }}" + filename)
-        .then(response => response.blob())
-        .then(blob => {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const encryptedData = e.target.result;
-const decrypted = CryptoJS.AES.decrypt(encryptedData, 'your-secret-key');
-const decryptedWords = decrypted; // WordArray
-const decryptedBytes = CryptoJS.enc.Latin1.stringify(decryptedWords); // get raw bytes as string
-const byteArray = new Uint8Array(decryptedBytes.length);
-for (let i = 0; i < decryptedBytes.length; i++) {
-    byteArray[i] = decryptedBytes.charCodeAt(i);
-}
-const decryptedBlob = new Blob([byteArray], { type: 'application/octet-stream' });
-
-                // Create a link to download the decrypted file
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(decryptedBlob);
-                link.download = filename.replace('.enc', ''); // Remove .enc extension
-                link.click();
-            };
-            reader.readAsText(blob); // Read the blob as text
-        })
-        .catch(error => {
-            console.error('Error downloading or decrypting file:', error);
-        });
-}
-</script>
 {% endblock %}

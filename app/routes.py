@@ -108,15 +108,9 @@ def upload_file():
             flash('No selected file')
             return redirect(request.url)
 
-        # assume filename ends with .enc
-        if file and file.filename.endswith('.enc'):
+        if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-
-            # read encrypted base64 string and write as binary
-            encrypted_base64 = file.read()
-            with open(file_path, 'wb') as f:
-                f.write(encrypted_base64)
+            file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
 
             # Save metadata
             new_file = File(filename=filename, user_id=current_user.id)
@@ -127,7 +121,7 @@ def upload_file():
             current_app.logger.info(f'User {current_user.id} uploaded "{filename}"')
             return redirect(url_for('main.index'))
 
-        flash('Invalid file format')
+        flash('Invalid file')
         return redirect(request.url)
 
     return render_template('upload.html')
