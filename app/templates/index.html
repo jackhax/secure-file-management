@@ -2,33 +2,62 @@
 {% block title %}Your Files{% endblock %}
 {% block content %}
 <h1>Your Uploaded Files</h1>
-<form method="POST" action="{{ url_for('main.upload_file') }}" enctype="multipart/form-data" class="mb-4">
-    <div class="form-group">
-        <label for="file">Upload a new file:</label>
-        <input type="file" class="form-control-file" id="file" name="file" required>
-    </div>
-    <button type="submit" class="btn btn-success">Upload</button>
-</form>
+
+<!-- Link to the Upload Page -->
+<a href="{{ url_for('main.upload_file') }}" class="btn btn-success mb-4">Upload a New File</a>
+
 <ul class="list-group mb-4">
     {% for file in files %}
     <li class="list-group-item d-flex justify-content-between align-items-center">
         {{ file.filename }}
         <div>
-            <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Get Download Link</a>
+            <a class="btn btn-primary btn-sm" href="#" onclick="downloadAndDecrypt('{{ file.filename }}'); return false;">Download</a>
             <a class="btn btn-secondary btn-sm" href="{{ url_for('main.share_file', file_id=file.id) }}">Share</a>
         </div>
     </li>
     {% endfor %}
 </ul>
+
 <h2>Files Shared With You</h2>
 <ul class="list-group">
     {% for file in shared_files %}
     <li class="list-group-item d-flex justify-content-between align-items-center">
         {{ file.filename }}
         <div>
-            <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Get Download Link</a>
+            <a class="btn btn-primary btn-sm" href="#" onclick="downloadAndDecrypt('{{ file.filename }}'); return false;">Download</a>
         </div>
     </li>
     {% endfor %}
 </ul>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js"></script>
+<script>
+function downloadAndDecrypt(filename) {
+    fetch("{{ url_for('main.download_file', filename='') }}" + filename)
+        .then(response => response.blob())
+        .then(blob => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const encryptedData = e.target.result;
+const decrypted = CryptoJS.AES.decrypt(encryptedData, 'your-secret-key');
+const decryptedWords = decrypted; // WordArray
+const decryptedBytes = CryptoJS.enc.Latin1.stringify(decryptedWords); // get raw bytes as string
+const byteArray = new Uint8Array(decryptedBytes.length);
+for (let i = 0; i < decryptedBytes.length; i++) {
+    byteArray[i] = decryptedBytes.charCodeAt(i);
+}
+const decryptedBlob = new Blob([byteArray], { type: 'application/octet-stream' });
+
+                // Create a link to download the decrypted file
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(decryptedBlob);
+                link.download = filename.replace('.enc', ''); // Remove .enc extension
+                link.click();
+            };
+            reader.readAsText(blob); // Read the blob as text
+        })
+        .catch(error => {
+            console.error('Error downloading or decrypting file:', error);
+        });
+}
+</script>
 {% endblock %}

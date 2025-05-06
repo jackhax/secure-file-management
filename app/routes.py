@@ -7,6 +7,7 @@ import os
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import secrets
+import base64
 
 main = Blueprint('main', __name__)
 
@@ -92,22 +93,33 @@ def upload_file():
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
+
         file = request.files['file']
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(
-                current_app.config['UPLOAD_FOLDER'], filename))
 
-            # Save file metadata to the database
+        # assume filename ends with .enc
+        if file and file.filename.endswith('.enc'):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+
+            # read encrypted base64 string and write as binary
+            encrypted_base64 = file.read()
+            with open(file_path, 'wb') as f:
+                f.write(encrypted_base64)
+
+            # Save metadata
             new_file = File(filename=filename, user_id=current_user.id)
             db.session.add(new_file)
             db.session.commit()
 
-            flash('File successfully uploaded')
+            flash('Encrypted file successfully uploaded')
             return redirect(url_for('main.index'))
+
+        flash('Invalid file format')
+        return redirect(request.url)
+
     return render_template('upload.html')
 
 
@@ -119,7 +131,7 @@ def download_file(filename):
     if file.user_id != current_user.id and not FileShare.query.filter_by(file_id=file.id, shared_with_user_id=current_user.id).first():
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
+    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 
 @main.route('/generate-download-link/<int:file_id>')
