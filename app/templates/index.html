@@ -14,7 +14,7 @@
     <li class="list-group-item d-flex justify-content-between align-items-center">
         {{ file.filename }}
         <div>
-            <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Get Download Link</a>
+            <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Download</a>
             <a class="btn btn-secondary btn-sm" href="{{ url_for('main.share_file', file_id=file.id) }}">Share</a>
         </div>
     </li>
@@ -26,7 +26,7 @@
     <li class="list-group-item d-flex justify-content-between align-items-center">
         {{ file.filename }}
         <div>
-            <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Get Download Link</a>
+            <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Download</a>
         </div>
     </li>
     {% endfor %}
