@@ -16,6 +16,9 @@
         <div>
             <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Download</a>
             <a class="btn btn-secondary btn-sm" href="{{ url_for('main.share_file', file_id=file.id) }}">Share</a>
+            <form method="POST" action="{{ url_for('main.delete_file', file_id=file.id) }}" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this file?');">Delete</button>
+            </form>
         </div>
     </li>
     {% endfor %}
