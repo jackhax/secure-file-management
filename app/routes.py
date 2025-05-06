@@ -158,7 +158,7 @@ def download_file_token(token):
         return redirect(url_for('main.index'))
     db.session.delete(download_token)
     db.session.commit()
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], file.filename)
+    return send_from_directory(current_app.config['UPLOAD_FOLDER'], file.filename, as_attachment=True)
 
 
 @main.route('/share/<int:file_id>', methods=['GET', 'POST'])
