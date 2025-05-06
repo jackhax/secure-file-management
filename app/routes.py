@@ -171,6 +171,11 @@ def share_file(file_id):
             flash('User not found')
             return redirect(request.url)
 
+        # Prevent sharing with yourself
+        if user_to_share_with.id == current_user.id:
+            flash('You cannot share a file with yourself')
+            return redirect(request.url)
+
         # Check if the file is already shared with this user
         existing_share = FileShare.query.filter_by(
             file_id=file.id, shared_with_user_id=user_to_share_with.id).first()
