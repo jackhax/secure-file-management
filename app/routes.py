@@ -39,6 +39,9 @@ auth = Blueprint('auth', __name__)
 
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
+    # kick out logged-in users
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
     if request.method == 'POST':
         email = request.form.get('email')
         username = request.form.get('username')
@@ -57,7 +60,7 @@ def register():
             password, method='pbkdf2:sha256'))
         db.session.add(new_user)
         db.session.commit()
-
+        current_app.logger.info(f'New user created: id={new_user.id}, email={new_user.email}')
         return redirect(url_for('auth.login'))
 
     return render_template('register.html')
@@ -65,6 +68,9 @@ def register():
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
+    # kick out logged-in users
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
@@ -75,6 +81,7 @@ def login():
             return redirect(url_for('auth.login'))
 
         login_user(user)
+        current_app.logger.info(f'User {user.id} logged in successfully')
         return redirect(url_for('main.index'))
 
     return render_template('login.html')
@@ -82,6 +89,7 @@ def login():
 
 @auth.route('/logout')
 def logout():
+    current_app.logger.info(f'User {current_user.get_id()} logging out')
     logout_user()
     flash('You have been logged out.')
     return redirect(url_for('auth.login'))
@@ -89,6 +97,7 @@ def logout():
 
 @main.route('/upload', methods=['GET', 'POST'])
 def upload_file():
+    current_app.logger.info(f'UPLOAD endpoint hit by user {current_user.id}')
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('No file part')
@@ -114,7 +123,8 @@ def upload_file():
             db.session.add(new_file)
             db.session.commit()
 
-            flash('Encrypted file successfully uploaded')
+            flash('File successfully uploaded')
+            current_app.logger.info(f'User {current_user.id} uploaded "{filename}"')
             return redirect(url_for('main.index'))
 
         flash('Invalid file format')
@@ -126,20 +136,25 @@ def upload_file():
 @main.route('/download/<filename>')
 @login_required
 def download_file(filename):
+    current_app.logger.info(f'DOWNLOAD request for "{filename}" by user {current_user.id}')
     file = File.query.filter_by(filename=filename).first_or_404()
     # Check if the current user is the owner or has been shared the file
     if file.user_id != current_user.id and not FileShare.query.filter_by(file_id=file.id, shared_with_user_id=current_user.id).first():
+        current_app.logger.warning(f'Unauthorized download attempt by user {current_user.id} for file "{filename}"')
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
+    current_app.logger.info(f'Authorization OK — sending "{filename}" to user {current_user.id}')
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 
 @main.route('/generate-download-link/<int:file_id>')
 @login_required
 def generate_download_link(file_id):
+    current_app.logger.info(f'GENERATE-LINK called for file_id={file_id} by user {current_user.id}')
     file = File.query.get_or_404(file_id)
     # Check if the current user is the owner or has access
     if file.user_id != current_user.id and not FileShare.query.filter_by(file_id=file.id, shared_with_user_id=current_user.id).first():
+        current_app.logger.warning(f'Unauthorized link gen attempt by user {current_user.id} for file_id={file_id}')
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
     # Generate a unique token
@@ -149,15 +164,18 @@ def generate_download_link(file_id):
         token=token, file_id=file.id, user_id=current_user.id, expires_at=expires_at)
     db.session.add(download_token)
     db.session.commit()
+    current_app.logger.info(f'Generated download token for file_id={file_id}, token={token[:8]}..., expires={expires_at}')
     return redirect(url_for('main.download_file_token', token=token))
 
 
 @main.route('/download/token/<token>')
 @login_required
 def download_file_token(token):
+    current_app.logger.info(f'DOWNLOAD-TOKEN hit with token={token[:8]}... by user {current_user.id}')
     download_token = DownloadToken.query.filter_by(token=token).first_or_404()
     if download_token.expires_at < datetime.utcnow():
         flash('Download link has expired')
+        current_app.logger.warning(f'Token expired: {token[:8]}...')
         return redirect(url_for('main.index'))
     file = download_token.file
     # Only allow if current user is the token creator, file owner, or shared user
@@ -166,21 +184,26 @@ def download_file_token(token):
     is_shared = FileShare.query.filter_by(
         file_id=file.id, shared_with_user_id=current_user.id).first() is not None
     if not (is_owner or is_token_user or is_shared):
+        current_app.logger.warning(f'Unauthorized token use by user {current_user.id} for token={token[:8]}...')
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
     db.session.delete(download_token)
     db.session.commit()
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], file.filename)
+    current_app.logger.info(f'Token consumed and file "{file.filename}" served to user {current_user.id}')
+    return send_from_directory(current_app.config['UPLOAD_FOLDER'], file.filename, as_attachment=True)
 
 
 @main.route('/share/<int:file_id>', methods=['GET', 'POST'])
 def share_file(file_id):
+    current_app.logger.info(f'SHARE page hit for file_id={file_id} by user {current_user.id}')
     file = File.query.get_or_404(file_id)
     if request.method == 'POST':
         email = request.form.get('email')
         user_to_share_with = User.query.filter_by(email=email).first()
+        current_app.logger.debug(f'Sharing file_id={file_id} with email={email}')
         if not user_to_share_with:
             flash('User not found')
+            current_app.logger.warning(f'Cannot share: user not found for email={email}')
             return redirect(request.url)
 
         # Prevent sharing with yourself
@@ -201,7 +224,50 @@ def share_file(file_id):
         db.session.add(new_share)
         db.session.commit()
 
+        current_app.logger.info(f'File {file_id} shared to user {user_to_share_with.id}')
         flash('File successfully shared')
         return redirect(url_for('main.index'))
 
     return render_template('share.html', file=file)
+
+
+@main.route('/delete/<int:file_id>', methods=['POST'])
+@login_required
+def delete_file(file_id):
+    file = File.query.get_or_404(file_id)
+    # Only the owner can delete
+    if file.user_id != current_user.id:
+        flash('You do not have permission to delete this file')
+        return redirect(url_for('main.index'))
+    # Delete file from filesystem
+    file_path = os.path.join(
+        current_app.config['UPLOAD_FOLDER'], file.filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    # Delete related shares and tokens
+    FileShare.query.filter_by(file_id=file.id).delete()
+    DownloadToken.query.filter_by(file_id=file.id).delete()
+    db.session.delete(file)
+    db.session.commit()
+    current_app.logger.info(f'File {file_id} fully deleted by user {current_user.id}')
+    flash('File deleted successfully')
+    return redirect(url_for('main.index'))
+
+
+@main.route('/unshare/<int:file_id>/<int:user_id>', methods=['POST'])
+@login_required
+def unshare_file(file_id, user_id):
+    file = File.query.get_or_404(file_id)
+    # Only the owner can unshare
+    if file.user_id != current_user.id:
+        flash('You do not have permission to unshare this file')
+        return redirect(url_for('main.index'))
+    share = FileShare.query.filter_by(file_id=file_id, shared_with_user_id=user_id).first()
+    if not share:
+        flash('Share entry not found')
+        return redirect(url_for('main.index'))
+    db.session.delete(share)
+    db.session.commit()
+    current_app.logger.info(f'File {file_id} unshared from user {user_id}')
+    flash('File access removed from user')
+    return redirect(url_for('main.index'))
