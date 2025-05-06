@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app, send_from_directory
+from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app, send_from_directory, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, current_user, logout_user, login_required
 from .models import User, File, FileShare, DownloadToken
@@ -8,12 +8,13 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import secrets
 import base64
+from cryptography.fernet import Fernet
+from io import BytesIO
 
 main = Blueprint('main', __name__)
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
-
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -110,7 +111,15 @@ def upload_file():
 
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            file.save(os.path.join(current_app.config['UPLOAD_FOLDER'], filename))
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+
+            # Encrypt the file content
+            file_content = file.read()
+            encrypted_content = current_app.config['CIPHER_SUITE'].encrypt(file_content)
+
+            # Save the encrypted file
+            with open(file_path, 'wb') as f:
+                f.write(encrypted_content)
 
             # Save metadata
             new_file = File(filename=filename, user_id=current_user.id)
@@ -137,8 +146,17 @@ def download_file(filename):
         current_app.logger.warning(f'Unauthorized download attempt by user {current_user.id} for file "{filename}"')
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
+
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+
+    # Decrypt the file content
+    with open(file_path, 'rb') as f:
+        encrypted_content = f.read()
+    decrypted_content = current_app.config['CIPHER_SUITE'].decrypt(encrypted_content)
+
+    # Send the decrypted content
     current_app.logger.info(f'Authorization OK — sending "{filename}" to user {current_user.id}')
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    return send_file(BytesIO(decrypted_content), download_name=filename, as_attachment=True)
 
 
 @main.route('/generate-download-link/<int:file_id>')
@@ -184,7 +202,16 @@ def download_file_token(token):
     db.session.delete(download_token)
     db.session.commit()
     current_app.logger.info(f'Token consumed and file "{file.filename}" served to user {current_user.id}')
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], file.filename, as_attachment=True)
+
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], file.filename)
+    # Decrypt the file content
+    with open(file_path, 'rb') as f:
+        encrypted_content = f.read()
+    decrypted_content = current_app.config['CIPHER_SUITE'].decrypt(encrypted_content)
+
+    # Send the decrypted content
+    current_app.logger.info(f'Authorization OK — sending "{file.filename}" to user {current_user.id}')
+    return send_file(BytesIO(decrypted_content), download_name=file.filename, as_attachment=True)
 
 
 @main.route('/share/<int:file_id>', methods=['GET', 'POST'])

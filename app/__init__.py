@@ -4,14 +4,25 @@ from flask_login import LoginManager
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+from cryptography.fernet import Fernet
+from dotenv import load_dotenv
 
+load_dotenv()
 db = SQLAlchemy()
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'  # Redirect to login page if not authenticated
 
+
 def create_app():
     app = Flask(__name__)
+    encryption_key = os.getenv('ENCRYPTION_KEY')
+    if not encryption_key:
+        raise ValueError("No ENCRYPTION_KEY set for Flask application")
+    cipher_suite = Fernet(encryption_key)
+    app.config['CIPHER_SUITE'] = cipher_suite
+
     app.config['SECRET_KEY'] = 'your_secret_key'
+    app.secret_key = os.environ['FLASK_SECRET_KEY']
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
     app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, '../uploads')
 
