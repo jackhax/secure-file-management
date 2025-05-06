@@ -38,6 +38,9 @@ auth = Blueprint('auth', __name__)
 
 @auth.route('/register', methods=['GET', 'POST'])
 def register():
+    # kick out logged-in users
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
     if request.method == 'POST':
         email = request.form.get('email')
         username = request.form.get('username')
@@ -64,6 +67,9 @@ def register():
 
 @auth.route('/login', methods=['GET', 'POST'])
 def login():
+    # kick out logged-in users
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
