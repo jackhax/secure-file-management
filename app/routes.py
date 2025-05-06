@@ -193,3 +193,43 @@ def share_file(file_id):
         return redirect(url_for('main.index'))
 
     return render_template('share.html', file=file)
+
+
+@main.route('/delete/<int:file_id>', methods=['POST'])
+@login_required
+def delete_file(file_id):
+    file = File.query.get_or_404(file_id)
+    # Only the owner can delete
+    if file.user_id != current_user.id:
+        flash('You do not have permission to delete this file')
+        return redirect(url_for('main.index'))
+    # Delete file from filesystem
+    file_path = os.path.join(
+        current_app.config['UPLOAD_FOLDER'], file.filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    # Delete related shares and tokens
+    FileShare.query.filter_by(file_id=file.id).delete()
+    DownloadToken.query.filter_by(file_id=file.id).delete()
+    db.session.delete(file)
+    db.session.commit()
+    flash('File deleted successfully')
+    return redirect(url_for('main.index'))
+
+
+@main.route('/unshare/<int:file_id>/<int:user_id>', methods=['POST'])
+@login_required
+def unshare_file(file_id, user_id):
+    file = File.query.get_or_404(file_id)
+    # Only the owner can unshare
+    if file.user_id != current_user.id:
+        flash('You do not have permission to unshare this file')
+        return redirect(url_for('main.index'))
+    share = FileShare.query.filter_by(file_id=file_id, shared_with_user_id=user_id).first()
+    if not share:
+        flash('Share entry not found')
+        return redirect(url_for('main.index'))
+    db.session.delete(share)
+    db.session.commit()
+    flash('File access removed from user')
+    return redirect(url_for('main.index'))
