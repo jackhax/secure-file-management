@@ -18,6 +18,21 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def is_strong_password(password):
+    import re
+    if len(password) < 8:
+        return False
+    if not re.search(r"[A-Z]", password):
+        return False
+    if not re.search(r"[a-z]", password):
+        return False
+    if not re.search(r"[0-9]", password):
+        return False
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?]", password):
+        return False
+    return True
+
+
 @main.route('/')
 def index():
     if not current_user.is_authenticated:
@@ -51,6 +66,9 @@ def register():
         if user_by_username:
             flash('Username already exists')
             return redirect(url_for('auth.register'))
+        if not is_strong_password(password):
+            flash('Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.')
+            return redirect(url_for('auth.register'))
 
         new_user = User(email=email, username=username, password=generate_password_hash(
             password, method='pbkdf2:sha256'))
@@ -69,10 +87,33 @@ def login():
         password = request.form.get('password')
 
         user = User.query.filter_by(email=email).first()
-        if not user or not check_password_hash(user.password, password):
+        if not user:
             flash('Please check your login details and try again.')
             return redirect(url_for('auth.login'))
-
+        if user.account_locked:
+            if user.lockout_time and user.lockout_time > datetime.utcnow():
+                flash('Your account is locked due to too many failed login attempts. Please try again later or contact support at support@example.com.')
+                return redirect(url_for('auth.login'))
+            else:
+                user.account_locked = False
+                user.failed_login_attempts = 0
+                user.lockout_time = None
+                db.session.commit()
+        if not check_password_hash(user.password, password):
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= 5:
+                user.account_locked = True
+                user.lockout_time = datetime.utcnow() + timedelta(minutes=15)
+                db.session.commit()
+                flash('Your account has been locked due to too many failed login attempts. Please try again in 15 minutes or contact support at support@example.com.')
+                return redirect(url_for('auth.login'))
+            db.session.commit()
+            flash('Please check your login details and try again.')
+            return redirect(url_for('auth.login'))
+        user.failed_login_attempts = 0
+        user.account_locked = False
+        user.lockout_time = None
+        db.session.commit()
         login_user(user)
         return redirect(url_for('main.index'))
 
@@ -225,7 +266,8 @@ def unshare_file(file_id, user_id):
     if file.user_id != current_user.id:
         flash('You do not have permission to unshare this file')
         return redirect(url_for('main.index'))
-    share = FileShare.query.filter_by(file_id=file_id, shared_with_user_id=user_id).first()
+    share = FileShare.query.filter_by(
+        file_id=file_id, shared_with_user_id=user_id).first()
     if not share:
         flash('Share entry not found')
         return redirect(url_for('main.index'))
