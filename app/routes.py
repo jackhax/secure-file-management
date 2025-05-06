@@ -215,3 +215,21 @@ def delete_file(file_id):
     db.session.commit()
     flash('File deleted successfully')
     return redirect(url_for('main.index'))
+
+
+@main.route('/unshare/<int:file_id>/<int:user_id>', methods=['POST'])
+@login_required
+def unshare_file(file_id, user_id):
+    file = File.query.get_or_404(file_id)
+    # Only the owner can unshare
+    if file.user_id != current_user.id:
+        flash('You do not have permission to unshare this file')
+        return redirect(url_for('main.index'))
+    share = FileShare.query.filter_by(file_id=file_id, shared_with_user_id=user_id).first()
+    if not share:
+        flash('Share entry not found')
+        return redirect(url_for('main.index'))
+    db.session.delete(share)
+    db.session.commit()
+    flash('File access removed from user')
+    return redirect(url_for('main.index'))

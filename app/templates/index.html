@@ -11,15 +11,33 @@
 </form>
 <ul class="list-group mb-4">
     {% for file in files %}
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-        {{ file.filename }}
-        <div>
-            <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Download</a>
-            <a class="btn btn-secondary btn-sm" href="{{ url_for('main.share_file', file_id=file.id) }}">Share</a>
-            <form method="POST" action="{{ url_for('main.delete_file', file_id=file.id) }}" style="display:inline;">
-                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this file?');">Delete</button>
-            </form>
+    <li class="list-group-item d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-center">
+            <span>{{ file.filename }}</span>
+            <div>
+                <a class="btn btn-primary btn-sm" href="{{ url_for('main.generate_download_link', file_id=file.id) }}">Download</a>
+                <a class="btn btn-secondary btn-sm" href="{{ url_for('main.share_file', file_id=file.id) }}">Share</a>
+                <form method="POST" action="{{ url_for('main.delete_file', file_id=file.id) }}" style="display:inline;">
+                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this file?');">Delete</button>
+                </form>
+            </div>
         </div>
+        {% set shares = file.shares %}
+        {% if shares|length > 0 %}
+        <div class="mt-2">
+            <strong>Shared with:</strong>
+            <ul class="list-inline">
+                {% for share in shares %}
+                <li class="list-inline-item">
+                    {{ share.user.email }}
+                    <form method="POST" action="{{ url_for('main.unshare_file', file_id=file.id, user_id=share.shared_with_user_id) }}" style="display:inline;">
+                        <button type="submit" class="btn btn-link btn-sm text-danger p-0" onclick="return confirm('Remove access for this user?');">Unshare</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
     </li>
     {% endfor %}
 </ul>
