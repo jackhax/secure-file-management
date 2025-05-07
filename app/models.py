@@ -19,6 +19,7 @@ class File(db.Model):
     upload_date = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     user = db.relationship('User', backref='files', lazy=True)
+    file_hash = db.Column(db.String(64), nullable=False)  # SHA-256 hex digest
 
 
 class FileShare(db.Model):
