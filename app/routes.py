@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app, send_from_directory
+from flask import Blueprint, render_template, redirect, url_for, request, flash, current_app, send_from_directory, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, current_user, logout_user, login_required
 from .models import User, File, FileShare, DownloadToken
@@ -7,12 +7,14 @@ import os
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import secrets
+import base64
+from cryptography.fernet import Fernet
+from io import BytesIO
 
 main = Blueprint('main', __name__)
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
-
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -77,7 +79,7 @@ def register():
             password, method='pbkdf2:sha256'))
         db.session.add(new_user)
         db.session.commit()
-
+        current_app.logger.info(f'New user created: id={new_user.id}, email={new_user.email}')
         return redirect(url_for('auth.login'))
 
     return render_template('register.html')
@@ -121,6 +123,7 @@ def login():
         user.lockout_time = None
         db.session.commit()
         login_user(user)
+        current_app.logger.info(f'User {user.id} logged in successfully')
         return redirect(url_for('main.index'))
 
     return render_template('login.html')
@@ -128,6 +131,7 @@ def login():
 
 @auth.route('/logout')
 def logout():
+    current_app.logger.info(f'User {current_user.get_id()} logging out')
     logout_user()
     flash('You have been logged out.')
     return redirect(url_for('auth.login'))
@@ -135,46 +139,75 @@ def logout():
 
 @main.route('/upload', methods=['GET', 'POST'])
 def upload_file():
+    current_app.logger.info(f'UPLOAD endpoint hit by user {current_user.id}')
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
+
         file = request.files['file']
         if file.filename == '':
             flash('No selected file')
             return redirect(request.url)
+
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            file.save(os.path.join(
-                current_app.config['UPLOAD_FOLDER'], filename))
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
 
-            # Save file metadata to the database
+            # Encrypt the file content
+            file_content = file.read()
+            encrypted_content = current_app.config['CIPHER_SUITE'].encrypt(file_content)
+
+            # Save the encrypted file
+            with open(file_path, 'wb') as f:
+                f.write(encrypted_content)
+
+            # Save metadata
             new_file = File(filename=filename, user_id=current_user.id)
             db.session.add(new_file)
             db.session.commit()
 
             flash('File successfully uploaded')
+            current_app.logger.info(f'User {current_user.id} uploaded "{filename}"')
             return redirect(url_for('main.index'))
+
+        flash('Invalid file')
+        return redirect(request.url)
+
     return render_template('upload.html')
 
 
 @main.route('/download/<filename>')
 @login_required
 def download_file(filename):
+    current_app.logger.info(f'DOWNLOAD request for "{filename}" by user {current_user.id}')
     file = File.query.filter_by(filename=filename).first_or_404()
     # Check if the current user is the owner or has been shared the file
     if file.user_id != current_user.id and not FileShare.query.filter_by(file_id=file.id, shared_with_user_id=current_user.id).first():
+        current_app.logger.warning(f'Unauthorized download attempt by user {current_user.id} for file "{filename}"')
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
+
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+
+    # Decrypt the file content
+    with open(file_path, 'rb') as f:
+        encrypted_content = f.read()
+    decrypted_content = current_app.config['CIPHER_SUITE'].decrypt(encrypted_content)
+
+    # Send the decrypted content
+    current_app.logger.info(f'Authorization OK — sending "{filename}" to user {current_user.id}')
+    return send_file(BytesIO(decrypted_content), download_name=filename, as_attachment=True)
 
 
 @main.route('/generate-download-link/<int:file_id>')
 @login_required
 def generate_download_link(file_id):
+    current_app.logger.info(f'GENERATE-LINK called for file_id={file_id} by user {current_user.id}')
     file = File.query.get_or_404(file_id)
     # Check if the current user is the owner or has access
     if file.user_id != current_user.id and not FileShare.query.filter_by(file_id=file.id, shared_with_user_id=current_user.id).first():
+        current_app.logger.warning(f'Unauthorized link gen attempt by user {current_user.id} for file_id={file_id}')
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
     # Generate a unique token
@@ -184,15 +217,18 @@ def generate_download_link(file_id):
         token=token, file_id=file.id, user_id=current_user.id, expires_at=expires_at)
     db.session.add(download_token)
     db.session.commit()
+    current_app.logger.info(f'Generated download token for file_id={file_id}, token={token[:8]}..., expires={expires_at}')
     return redirect(url_for('main.download_file_token', token=token))
 
 
 @main.route('/download/token/<token>')
 @login_required
 def download_file_token(token):
+    current_app.logger.info(f'DOWNLOAD-TOKEN hit with token={token[:8]}... by user {current_user.id}')
     download_token = DownloadToken.query.filter_by(token=token).first_or_404()
     if download_token.expires_at < datetime.utcnow():
         flash('Download link has expired')
+        current_app.logger.warning(f'Token expired: {token[:8]}...')
         return redirect(url_for('main.index'))
     file = download_token.file
     # Only allow if current user is the token creator, file owner, or shared user
@@ -201,21 +237,35 @@ def download_file_token(token):
     is_shared = FileShare.query.filter_by(
         file_id=file.id, shared_with_user_id=current_user.id).first() is not None
     if not (is_owner or is_token_user or is_shared):
+        current_app.logger.warning(f'Unauthorized token use by user {current_user.id} for token={token[:8]}...')
         flash('You do not have permission to access this file')
         return redirect(url_for('main.index'))
     db.session.delete(download_token)
     db.session.commit()
-    return send_from_directory(current_app.config['UPLOAD_FOLDER'], file.filename, as_attachment=True)
+    current_app.logger.info(f'Token consumed and file "{file.filename}" served to user {current_user.id}')
+
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], file.filename)
+    # Decrypt the file content
+    with open(file_path, 'rb') as f:
+        encrypted_content = f.read()
+    decrypted_content = current_app.config['CIPHER_SUITE'].decrypt(encrypted_content)
+
+    # Send the decrypted content
+    current_app.logger.info(f'Authorization OK — sending "{file.filename}" to user {current_user.id}')
+    return send_file(BytesIO(decrypted_content), download_name=file.filename, as_attachment=True)
 
 
 @main.route('/share/<int:file_id>', methods=['GET', 'POST'])
 def share_file(file_id):
+    current_app.logger.info(f'SHARE page hit for file_id={file_id} by user {current_user.id}')
     file = File.query.get_or_404(file_id)
     if request.method == 'POST':
         email = request.form.get('email')
         user_to_share_with = User.query.filter_by(email=email).first()
+        current_app.logger.debug(f'Sharing file_id={file_id} with email={email}')
         if not user_to_share_with:
             flash('User not found')
+            current_app.logger.warning(f'Cannot share: user not found for email={email}')
             return redirect(request.url)
 
         # Prevent sharing with yourself
@@ -236,6 +286,7 @@ def share_file(file_id):
         db.session.add(new_share)
         db.session.commit()
 
+        current_app.logger.info(f'File {file_id} shared to user {user_to_share_with.id}')
         flash('File successfully shared')
         return redirect(url_for('main.index'))
 
@@ -260,6 +311,7 @@ def delete_file(file_id):
     DownloadToken.query.filter_by(file_id=file.id).delete()
     db.session.delete(file)
     db.session.commit()
+    current_app.logger.info(f'File {file_id} fully deleted by user {current_user.id}')
     flash('File deleted successfully')
     return redirect(url_for('main.index'))
 
@@ -279,5 +331,6 @@ def unshare_file(file_id, user_id):
         return redirect(url_for('main.index'))
     db.session.delete(share)
     db.session.commit()
+    current_app.logger.info(f'File {file_id} unshared from user {user_id}')
     flash('File access removed from user')
     return redirect(url_for('main.index'))
