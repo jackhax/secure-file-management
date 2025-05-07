@@ -1,6 +1,6 @@
 # Secure File Management System
 
-This is a secure file management system built using Python, Flask, and SQLite. It allows users to register, log in, upload files, download files, and share files with other users. The application also includes an admin portal for managing users and files.
+This is a secure file management system built using Python, Flask, and SQLite. It allows users to register, log in, upload files, download files, and share files with other users.
 
 ## Deployment
 
