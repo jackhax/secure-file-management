@@ -23,9 +23,19 @@ with app.app_context():
         print("Database initialized!")
 
 if __name__ == '__main__':
+    cert_path = "/etc/letsencrypt/live/sfm.3.149.241.240.sslip.io/fullchain.pem"
+    key_path = "/etc/letsencrypt/live/sfm.3.149.241.240.sslip.io/privkey.pem"
+
+    default_cert_path = "certs/cert.pem"
+    default_key_path = "certs/key.pem"
+
+    ssl_context = (
+        cert_path if os.path.exists(cert_path) else default_cert_path,
+        key_path if os.path.exists(key_path) else default_key_path
+    )
     app.run(
         debug=True,
-        ssl_context=('certs/cert.pem', 'certs/key.pem'),
+        ssl_context=ssl_context,
         host='0.0.0.0',
         port=443
     )
