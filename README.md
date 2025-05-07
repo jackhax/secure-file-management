@@ -2,6 +2,10 @@
 
 This is a secure file management system built using Python, Flask, and SQLite. It allows users to register, log in, upload files, download files, and share files with other users. The application also includes an admin portal for managing users and files.
 
+## Deployment
+
+- [Website URL](sfm.3.149.241.240.sslip.io)
+
 ## Features
 
 - User registration and login
