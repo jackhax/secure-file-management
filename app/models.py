@@ -1,7 +1,6 @@
 from . import db
 from flask_login import UserMixin
-from datetime import datetime, timedelta
-import secrets
+from datetime import datetime
 
 
 class User(db.Model, UserMixin):
@@ -9,6 +8,9 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(150), nullable=False, unique=True)
     email = db.Column(db.String(150), nullable=False, unique=True)
     password = db.Column(db.String(150), nullable=False)
+    failed_login_attempts = db.Column(db.Integer, default=0)
+    account_locked = db.Column(db.Boolean, default=False)
+    lockout_time = db.Column(db.DateTime, nullable=True)
 
 
 class File(db.Model):
