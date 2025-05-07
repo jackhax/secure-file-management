@@ -18,6 +18,7 @@ class File(db.Model):
     filename = db.Column(db.String(150), nullable=False)
     upload_date = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user = db.relationship('User', backref='files', lazy=True)
 
 
 class FileShare(db.Model):
