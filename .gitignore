@@ -1,6 +1,7 @@
 .DS_Store
 certs/
 .env
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
