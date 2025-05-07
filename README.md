@@ -11,7 +11,6 @@ This is a secure file management system built using Python, Flask, and SQLite. I
 - User registration and login
 - File upload and download
 - File sharing between users
-- Admin portal for managing users and files
 - Secure file access with user authentication
 - Minimalistic and responsive UI using Bootstrap
 
@@ -57,7 +56,7 @@ Follow these instructions to set up and run the project locally on your machine.
    pip install -r requirements.txt
    ```
 
-4. **Initialize the TLS certificates**
+4. **Initialize the TLS certificates to test locally**
 
    Run the certificate initialization script to create the necessary certificate.
 
